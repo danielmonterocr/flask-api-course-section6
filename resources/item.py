@@ -12,6 +12,11 @@ class Item(Resource):
         required=True,
         help="This field cannot be left blank!"
     )
+    parser.add_argument('store_id',
+        type=float,
+        required=True,
+        help="Every item needs a store id."
+    )
 
     @jwt_required()
     def get(self, name):
@@ -27,25 +32,19 @@ class Item(Resource):
  
         data = Item.parser.parse_args() 
  
-        item = ItemModel(name, data['price'])
+        item = ItemModel(name, **data)
 
         try:
-            print("call insert now")
-            item.insert()
+            item.save_to_db()
         except:
             return {'message': "An error ocurred inserting the item."}, 500
 
-        return item, 201
+        return item.json(), 201
 
     def delete(self, name):
-        connection = sqlite3.connect('data.db')
-        cursor = connection.cursor()
-
-        query = "DELETE FROM items WHERE name=?"
-        cursor.execute(query, (name,))
-
-        connection.commit()
-        connection.close()
+        item = ItemModel.find_by_name(name)
+        if item:
+            item.delete_from_db()
 
         return {'message': 'Item deleted'}
 
@@ -53,33 +52,17 @@ class Item(Resource):
         data = Item.parser.parse_args()
 
         item = ItemModel.find_by_name(name) 
-        updated_item = ItemModel(name, data['price'])
 
         if item is None:
-            try:
-                updated_item.insert()
-            except:
-                return {'message': "An error ocurred inserting the item."}, 500
+            item = ItemModel(name, **data)
         else:
-            try:
-                updated_item.update()
-            except:
-                return {'message': "An error ocurred inserting the item."}, 500
+            item.price = data['price']
 
-        return updated_item.json()
+        item.save_to_db()
+        
+        return item.json()
 
 
 class ItemList(Resource):
     def get(self):
-        connection = sqlite3.connect('data.db')
-        cursor = connection.cursor()
-
-        query = "SELECT * from items"
-        result = cursor.execute(query)
-        items = []
-        for row in result:
-            items.append({'name': row[0], 'price': row[1]})
-        
-        connection.close()
-
-        return {"items": items}
+        return {'items:': [item.json() for item in ItemModel.query.all()]}
